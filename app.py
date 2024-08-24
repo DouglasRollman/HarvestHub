@@ -3,28 +3,61 @@ import pandas as pd
 import folium
 from streamlit_folium import st_folium
 from folium import IFrame
-# Inject custom CSS
-st.markdown("""
-    <style>
-        .reportview-container .main .block-container {
-            padding: 2rem;
-        }
-        .sidebar .sidebar-content {
-            background-color: #f5f5f5;
-        }
-        .css-18e3th9 {
-            font-size: 18px;
-        }
-    </style>
-""", unsafe_allow_html=True)
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
+# Add a logo at the top of the app
+st.image("Vista_Logos/logo-transparent-png.png", width=400)
+
+
+# Inject custom CSS
+# Custom CSS
+st.markdown(
+    """
+    <style>
+    /* Change the sidebar background color */
+    .css-1d391kg {
+        background-color: #e8f4f8;
+    }
+
+    /* Change the primary color (e.g., for buttons) */
+    .stButton>button {
+        background-color: #3498db;
+        color: white;
+    }
+
+    /* Change the font and text color */
+    .stTextInput, .stTextArea, .stSelectbox {
+        color: #333333;
+        font-family: "Arial", sans-serif;
+    }
+
+    /* Customize the map container */
+    .folium-container {
+        border: 2px solid #3498db;
+        border-radius: 10px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+# Mission Statement
+st.markdown(
+    """
+    ## Our Mission
+    **Harvest Hub** is an interactive map that connects people to over 550 food pantries across the city.
+    The platform is filterable by days open and borough, ensuring quick access to essential resources when needed most.
+    """
+)
+
+college_data = pd.read_csv('csv/cuny_food_rows.csv')
 df = pd.read_csv('csv/food_rows.csv')
 
 # Streamlit app
 st.title('Food Pantry Map')
 
 # Tabs for different views
-tabs = st.tabs(["Map View", "Data Table"])
+tabs = st.tabs(["Map View", "Data Table", "Contact a College"])
 
 # Map View
 with tabs[0]:
@@ -37,7 +70,7 @@ with tabs[0]:
     boroughs = st.sidebar.multiselect(
         'Select Boroughs',
         options=df['BOROUGH'].unique(),
-        default=df['BOROUGH'].unique()
+        default=['Manhattan']  # Default to Manhattan only
     )
 
     # Days filter using checkboxes inside an expander
@@ -106,3 +139,47 @@ with tabs[0]:
 with tabs[1]:
     st.write('Food Pantries')
     st.dataframe(filtered_df)
+
+# Content for Tab 3 (Contact a College form)
+with tabs[2]:
+    st.title("Contact a College")
+    
+    # Extract unique college names from the 'School' column
+    college_names = college_data['School'].unique().tolist()
+
+    # Form for user input
+    with st.form(key='contact_form'):
+        selected_college = st.selectbox("Choose a College", options=college_names)
+        user_email = st.text_input("Your Email Address")
+        message = st.text_area("Your Message")
+        submit_button = st.form_submit_button(label='Send Message')
+
+    if submit_button:
+        # Check if email and message are provided
+        if user_email and message:
+            # Find the college email based on the selected college
+            college_email = college_data.loc[college_data['School'] == selected_college, 'Email'].values[0]
+
+            # Prepare the email
+            msg = MIMEMultipart()
+            msg['From'] = user_email
+            msg['To'] = college_email
+            msg['Subject'] = f"Message from {user_email}"
+
+            # Attach the message body
+            msg.attach(MIMEText(message, 'plain'))
+
+            try:
+                # Set up the SMTP server (example uses Gmail's SMTP server)
+                server = smtplib.SMTP('smtp.gmail.com', 587)
+                server.starttls()
+                server.login("your_email@gmail.com", "your_email_password")
+                text = msg.as_string()
+                server.sendmail(user_email, college_email, text)
+                server.quit()
+
+                st.success(f"Message sent successfully to {selected_college}!")
+            except Exception as e:
+                st.error(f"Failed to send message. Error: {e}")
+        else:
+            st.error("Please provide both your email address and a message.")
